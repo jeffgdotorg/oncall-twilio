@@ -1,4 +1,7 @@
-from flask import Flask
+from flask import (
+        Flask,
+        url_for
+)
 from twilio.twiml.voice_response import VoiceResponse, Gather, Record
 
 app = Flask(__name__)
@@ -15,8 +18,8 @@ def public_answer():
     with resp.gather(
             num_digits=1, action=url_for('public_keypress'), method="POST"
     ) as g:
-        g.say(message="Press 1 to leave a message for the Open N M S on-call engineer", voice='alice', loop=3)
-    return twiml(resp)
+        g.say(message="Press 1 to leave a message for the Open N M S on-call engineer.", voice='alice')
+    return str(resp)
 
 @app.route("/public/keypress", methods=['POST'])
 def public_keypress():
@@ -27,12 +30,11 @@ def public_keypress():
     if option_actions.has_key(selected_option):
         resp = VoiceResponse()
         option_actions[selected_option](resp)
-        return twiml(response)
+        return str(response)
     return _disconnect_call()
 
 def _record_message(resp):
     resp.record(max_length=300, recording_status_callback=url_for(public_sendmms), recording_status_callback_event='completed absent', recording_status_callback_method='POST')
-    resp.
     return resp
 
 def _disconnect_call(resp):
@@ -41,5 +43,5 @@ def _disconnect_call(resp):
     return resp
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')
 
