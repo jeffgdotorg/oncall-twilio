@@ -5,16 +5,27 @@ from flask import (
         url_for,
         request
 )
+from flask_mail import Mail, Message
 from dotenv import load_dotenv
 from twilio.twiml.voice_response import VoiceResponse, Gather, Record
 from twilio.rest import Client
 from urllib.parse import urlencode
+import urllib
 
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
 
 app = Flask(__name__)
+
+app.config.update(
+            DEBUG=True,
+            MAIL_SERVER='aspmx.l.google.com',
+            MAIL_PORT=25,
+            MAIL_USE_TLS=True
+        )
+
+mailer = Mail(app)
 
 @app.route('/')
 @app.route('/public')
@@ -36,7 +47,7 @@ def public_answer():
 def public_keypress():
     """The caller pressed a key. Now record their message, or hang up if wrong key."""
     selected_option = request.form['Digits']
-    logging.debug('Caller from %s, SID %s pressed %d', str(request.form.get('From')), str(request.form.get('CallSid')), selected_option)
+    logging.debug('Caller from %s, SID %s pressed %s', str(request.form.get('From')), str(request.form.get('CallSid')), selected_option)
     resp = VoiceResponse()
     if selected_option == '1':
         _record_message(resp, request)
@@ -60,6 +71,7 @@ def public_recordingcb():
     resp = VoiceResponse()
     if rec_status == 'completed':
         _deliver_mms(resp, request)
+        _deliver_email(resp, request)
     elif rec_status == 'failed':
         _record_failed(resp, request)
     else:
@@ -87,27 +99,44 @@ def _record_message(resp, request):
     resp.record(action=url_for('public_afterrec'), max_length=300, recording_status_callback=url_for('public_recordingcb') + '?' + relay_query, recording_status_callback_event='completed absent', recording_status_callback_method='POST')
     return resp
 
-def _deliver_mms(resp, request):
-    orig_call_sid = str(request.args.get('OnmsOrigCallSid'))
-    caller_num = str(request.args.get('OnmsOrigFrom'))
+def _coalesce_call_details(resp, request):
+    details = dict()
+    details['orig_call_sid'] = str(request.args.get('OnmsOrigCallSid'))
+    details['caller_num'] = str(request.args.get('OnmsOrigFrom'))
     if 'OnmsOrigCallerName' in request.args:
-        caller_name = str(request.args.get('OnmsOrigCallerName'))
+        details['caller_name'] = str(request.args.get('OnmsOrigCallerName'))
     elif 'OnmsOrigFromCity' in request.args:
-        caller_name = str(request.args.get('OnmsOrigFromCity')) + " " + str(request.args.get('OnmsOrigFromState'))
+        details['caller_name'] = str(request.args.get('OnmsOrigFromCity')) + " " + str(request.args.get('OnmsOrigFromState'))
     else:
-        caller_name = 'Unknown Caller'
+        details['caller_name'] = 'Unknown Caller'
+    details['rec_len'] = request.form['RecordingDuration']
+    details['rec_url'] = '{}.mp3'.format(request.form['RecordingUrl'])
+    return details
 
-    rec_len = request.form['RecordingDuration']
-    rec_url = '{}.mp3'.format(request.form['RecordingUrl'])
-    logging.info('Call from %s, SID %s: Sending MMS of %d-second message from %s <%s> with MediaUrl=%s', caller_num, orig_call_sid, rec_len, caller_name, caller_num, rec_url)
+def _deliver_mms(resp, request):
+    call_details = _coalesce_call_details(resp, request)
+    logging.info('Call from %s, SID %s: Sending MMS of %s-second message from %s <%s> with MediaUrl=%s', call_details['caller_num'], call_details['orig_call_sid'], call_details['rec_len'], call_details['caller_name'], call_details['caller_num'], call_details['rec_url'])
     msg = client.messages.create(
-                    body='On-Call voicemail ({} sec) received from {} <{}>'.format(rec_len, caller_name, caller_num),
+                    body='On-Call voicemail ({} sec) received from {} <{}>'.format(call_details['rec_len'], call_details['caller_name'], call_details['caller_num']),
                     from_=os.getenv("ONMS_DEFAULT_SOURCE_NUMBER"),
                     to=os.getenv("ONMS_DEFAULT_TARGET_NUMBER"),
-                    media_url=rec_url,
+                    media_url=call_details['rec_url'],
                     status_callback='{}/{}'.format(os.getenv('ONCALL_APP_BASE_URL'), url_for('public_mmsstatuscb'))
                 )
     logging.info('Submitted message with SID %s', msg.sid)
+    return resp
+
+def _deliver_email(resp, request):
+    call_details = _coalesce_call_details(resp, request)
+    email = Message(
+                "[OnCall] New on-call voicemail",
+                sender="oncall-dev@opennms.com",
+                recipients=["jeffg@opennms.com"],
+                body='On-Call voicemail ({} sec) received from {} <{}>. Audio: {}'.format(call_details['rec_len'], call_details['caller_name'], call_details['caller_num'], call_details['rec_url'])
+            )
+    with urllib.request.urlopen(call_details['rec_url']) as rec_rsp:
+        email.attach("voicemail.mp3", "audio/mpeg", rec_rsp.read())
+    mailer.send(email)
     return resp
 
 def _record_failed(resp, request):
