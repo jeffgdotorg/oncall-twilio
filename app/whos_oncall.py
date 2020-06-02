@@ -12,6 +12,18 @@ def get_current_oncall_user():
     config = _get_oncall_config()
     return config['current_config']['user']
 
+def get_current_from_phone():
+    config = _get_oncall_config()
+    return config['current_config']['from_phone']
+
+def get_current_from_email():
+    config = _get_oncall_config()
+    return config['current_config']['from_email']
+
+def get_current_to_email():
+    config = _get_oncall_config()
+    return config['current_config']['to_email']
+
 def get_available_oncall_users():
     config = _get_oncall_config()
     return config['available_users']['users']

@@ -11,20 +11,19 @@ from twilio.twiml.voice_response import VoiceResponse, Gather, Record
 from twilio.rest import Client
 from urllib.parse import urlencode
 import urllib
+import whos_oncall
 
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
 
 app = Flask(__name__)
-
 app.config.update(
             DEBUG=True,
             MAIL_SERVER='aspmx.l.google.com',
             MAIL_PORT=25,
             MAIL_USE_TLS=True
         )
-
 mailer = Mail(app)
 
 @app.route('/')
@@ -118,8 +117,8 @@ def _deliver_mms(resp, request):
     logging.info('Call from %s, SID %s: Sending MMS of %s-second message from %s <%s> with MediaUrl=%s', call_details['caller_num'], call_details['orig_call_sid'], call_details['rec_len'], call_details['caller_name'], call_details['caller_num'], call_details['rec_url'])
     msg = client.messages.create(
                     body='On-Call voicemail ({} sec) received from {} <{}>'.format(call_details['rec_len'], call_details['caller_name'], call_details['caller_num']),
-                    from_=os.getenv("ONMS_DEFAULT_SOURCE_NUMBER"),
-                    to=os.getenv("ONMS_DEFAULT_TARGET_NUMBER"),
+                    from_=whos_oncall.get_current_from_phone(),
+                    to=whos_oncall.get_current_oncall_user()['phone'],
                     media_url=call_details['rec_url'],
                     status_callback='{}/{}'.format(os.getenv('ONCALL_APP_BASE_URL'), url_for('public_mmsstatuscb'))
                 )
@@ -130,8 +129,8 @@ def _deliver_email(resp, request):
     call_details = _coalesce_call_details(resp, request)
     email = Message(
                 "[OnCall] New on-call voicemail",
-                sender="oncall-dev@opennms.com",
-                recipients=["jeffg@opennms.com"],
+                sender=whos_oncall.get_current_from_email(),
+                recipients=[whos_oncall.get_current_to_email()],
                 body='On-Call voicemail ({} sec) received from {} <{}>. Audio: {}'.format(call_details['rec_len'], call_details['caller_name'], call_details['caller_num'], call_details['rec_url'])
             )
     with urllib.request.urlopen(call_details['rec_url']) as rec_rsp:
