@@ -12,6 +12,12 @@ def get_current_oncall_user():
     config = _get_oncall_config()
     return config['current_config']['user']
 
+def set_current_oncall_user(user_id):
+    config = _get_oncall_config()
+    assert user_id in config['available_users']['users']
+    config['current_config']['user'] = config['available_users']['users'][user_id]
+    _set_oncall_config(config)
+
 def get_current_from_phone():
     config = _get_oncall_config()
     return config['current_config']['from_phone']
@@ -27,6 +33,13 @@ def get_current_to_email():
 def get_available_oncall_users():
     config = _get_oncall_config()
     return config['available_users']['users']
+
+def lookup_user_by_phone(phonenum):
+    config = _get_oncall_config()
+    for user_id, user_dict in config['available_users']['users'].items():
+        if phonenum == user_dict['phone']:
+            return user_dict
+    return None
 
 def _validate_oncall_config(config_dict):
     assert 'current_config' in config_dict, 'Top-level current_config not present'

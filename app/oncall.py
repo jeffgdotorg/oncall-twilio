@@ -2,12 +2,15 @@ import logging
 import os
 from flask import (
         Flask,
+        session,
+        redirect,
         url_for,
         request
 )
 from flask_mail import Mail, Message
 from dotenv import load_dotenv
 from twilio.twiml.voice_response import VoiceResponse, Gather, Record
+from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 from urllib.parse import urlencode
 import urllib
@@ -18,13 +21,19 @@ logging.basicConfig(level=logging.DEBUG)
 client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
 
 app = Flask(__name__)
+app.secret_key = b")DFNG'96.xCn]Vfd^!Cy"
 app.config.update(
             DEBUG=True,
             MAIL_SERVER='aspmx.l.google.com',
             MAIL_PORT=25,
-            MAIL_USE_TLS=True
+            MAIL_USE_TLS=True,
+            PERMANENT_SESSION_LIFETIME=30,
         )
 mailer = Mail(app)
+
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
 @app.route('/')
 @app.route('/public')
@@ -87,6 +96,114 @@ def public_mmsstatuscb():
     if (message_status == 'failed' or message_status == 'undelivered'):
         logging.error('Message with SID %s has unacceptable status: %s', message_sid, message_status)
     return ('', 204)
+
+@app.route("/msgcontrol/entry", methods=['POST'])
+def msgcontrol_entry():
+    incoming_msg = request.values.get('Body', '').lower().strip()
+    incoming_num = request.values.get('From', '')
+    resp = MessagingResponse()
+    friend = None
+    if 'user_dict' in session:
+        friend = session['user_dict']
+        logging.info('Retrieved friend identity from session')
+    else:
+        friend = whos_oncall.lookup_user_by_phone(incoming_num)
+        if friend != None:
+            session['user_dict'] = friend
+            logging.info('Looked up friend identity from config, stored in session')
+    if friend == None:
+        logging.info("Ignoring message from unknown number %s", incoming_num)
+        return str(resp)
+    if 'take' in incoming_msg:
+        resp.redirect(url_for('msgcontrol_take'))
+    elif 'who' in incoming_msg:
+        resp.redirect(url_for('msgcontrol_who'))
+    elif 'c' == incoming_msg:
+        resp.redirect(url_for('msgcontrol_confirm'))
+    elif 'x' == incoming_msg:
+        resp.redirect(url_for('msgcontrol_cancel'))
+    elif 'halp' in incoming_msg:
+        resp.redirect(url_for('msgcontrol_help'))
+    else:
+        resp.redirect(url_for('msgcontrol_help'))
+    return str(resp)
+
+@app.route("/msgcontrol/take", methods=['POST'])
+def msgcontrol_take():
+    incoming_msg = request.values.get('Body', '').lower().strip()
+    incoming_num = request.values.get('From', '')
+    resp = MessagingResponse()
+    user_dict = session.get('user_dict')
+    if user_dict == None:
+        logging.info('No user_dict in session. Bailing.')
+        return str(resp)
+    resp.message(user_dict['name'] + ' to be made on-call engineer, reply C to confirm or X to cancel')
+    session['active_flow'] = 'take'
+    return str(resp)
+
+@app.route("/msgcontrol/who", methods=['POST'])
+def msgcontrol_who():
+    incoming_msg = request.values.get('Body', '').lower().strip()
+    incoming_num = request.values.get('From', '')
+    resp = MessagingResponse()
+    user_dict = session.get('user_dict')
+    if user_dict == None:
+        logging.info('No user_dict in session. Bailing.')
+        return str(resp)
+    current_oncall_user = whos_oncall.get_current_oncall_user()
+    resp.message('Current on-call engineer: {} <{}>'.format(current_oncall_user['name'], current_oncall_user['phone']))
+    return str(resp)
+
+@app.route("/msgcontrol/help", methods=['POST'])
+def msgcontrol_help():
+    incoming_msg = request.values.get('Body', '').lower().strip()
+    incoming_num = request.values.get('From', '')
+    resp = MessagingResponse()
+    user_dict = session.get('user_dict')
+    if user_dict == None:
+        logging.info('No user_dict in session. Bailing.')
+        return str(resp)
+    resp.message('Hi there, {}. Commands I understand:\n\n TAKE\n WHO\n HALP\n'.format(user_dict['name']))
+    return str(resp)
+
+@app.route("/msgcontrol/confirm", methods=['POST'])
+def msgcontrol_confirm():
+    incoming_msg = request.values.get('Body', '').lower().strip()
+    incoming_num = request.values.get('From', '')
+    resp = MessagingResponse()
+    user_dict = session.get('user_dict')
+    if user_dict == None:
+        logging.info('No user_dict in session. Bailing.')
+        return str(resp)
+    if session.get('active_flow') != 'take':
+        logging.info('Got what looks like a take-confirmation, but active_flow is {}. Session expired?'.format(session.get('active_flow')))
+        return str(resp)
+    if 'c' != incoming_msg:
+        logging.info('This URL is for take-confirmation but the message body {} does not fit. Bailing.'.format(incoming_msg))
+        return str(resp)
+    whos_oncall.set_current_oncall_user(user_dict['id'])
+    resp.message('Okay, {}, you are now on call. Please leave a message to complete the flow and test delivery.'.format(user_dict['name']))
+    session.pop('active_flow', '')
+    return str(resp)
+
+@app.route("/msgcontrol/cancel", methods=['POST'])
+def msgcontrol_cancel():
+    incoming_msg = request.values.get('Body', '').lower().strip()
+    incoming_num = request.values.get('From', '')
+    resp = MessagingResponse()
+    user_dict = session.get('user_dict')
+    if user_dict == None:
+        logging.info('No user_dict in session. Bailing.')
+        return str(resp)
+    if session.get('active_flow') != 'take':
+        logging.info('Got what looks like a take-cancel, but active_flow is {}. Session expired?'.format(session.get('active_flow')))
+        return str(resp)
+    if 'x' != incoming_msg:
+        logging.info('This URL is for take-cancel but the message body {} does not fit. Bailing.'.format(incoming_msg))
+        return str(resp)
+    resp.message('Okay, {}, nothing changes: {} remains on call.'.format(user_dict['name'], whos_oncall.get_current_oncall_user()['name']))
+    session.pop('active_flow', '')
+    return str(resp)
 
 def _record_message(resp, request):
     relay_vars = {'OnmsOrigFrom': request.form['From'],
