@@ -137,6 +137,10 @@ def msgcontrol_take():
     if user_dict == None:
         logging.info('No user_dict in session. Bailing.')
         return str(resp)
+    current_oncall_user = whos_oncall.get_current_oncall_user()
+    if user_dict['id'] == current_oncall_user['id']:
+        resp.message('You are already on call, {}. Nothing changes.'.format(user_dict['name']))
+        return str(resp)
     resp.message(user_dict['name'] + ' to be made on-call engineer, reply C to confirm or X to cancel')
     session['active_flow'] = 'take'
     return str(resp)
