@@ -18,6 +18,10 @@ def set_current_oncall_user(user_id):
     config['current_config']['user'] = config['available_users']['users'][user_id]
     _set_oncall_config(config)
 
+def get_current_pager_phone():
+    config = _get_oncall_config()
+    return config['current_config']['pager_phone']
+
 def get_current_from_phone():
     config = _get_oncall_config()
     return config['current_config']['from_phone']
@@ -55,6 +59,8 @@ def _validate_oncall_config(config_dict):
     return True
 
 def _validate_top_contact_items(current_config):
+    assert 'pager_phone' in current_config, 'current_config lacks pager_phone'
+    assert re.fullmatch(r"^\+1[2-9][0-9]{2}[2-9][0-9]{6}$", current_config['pager_phone']), 'current_config pager_phone ' + current_config['pager_phone'] + ' failed validation'
     assert 'from_phone' in current_config, 'current_config lacks from_phone'
     assert re.fullmatch(r"^\+1[2-9][0-9]{2}[2-9][0-9]{6}$", current_config['from_phone']), 'current_config from_phone ' + current_config['from_phone'] + ' failed validation'
     assert 'from_email' in current_config, 'current_config lacks from_email'
