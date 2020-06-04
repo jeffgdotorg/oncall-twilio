@@ -1,3 +1,0 @@
-[submodule "modules/qrious"]
-	path = modules/qrious
-	url = git@github.com:neocotic/qrious.git
