@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from dotenv import load_dotenv
 import boto3
 import json
@@ -12,11 +13,11 @@ def get_current_oncall_user():
     config = _get_oncall_config()
     return config['current_config']['user']
 
-def set_current_oncall_user(user_id):
+def set_current_oncall_user(user_id, actor_id):
     config = _get_oncall_config()
     assert user_id in config['available_users']['users']
     config['current_config']['user'] = config['available_users']['users'][user_id]
-    _set_oncall_config(config)
+    _set_oncall_config(config, actor_id)
 
 def get_current_pager_phone():
     config = _get_oncall_config()
@@ -38,6 +39,14 @@ def get_available_oncall_users():
     config = _get_oncall_config()
     return config['available_users']['users']
 
+def get_oncall_config_last_modified_time():
+    config = _get_oncall_config()
+    return config['current_config']['last_modified_time']
+
+def get_oncall_config_last_modified_user_id():
+    config = _get_oncall_config()
+    return config['current_config']['last_modified_user_id']
+
 def lookup_user_by_phone(phonenum):
     config = _get_oncall_config()
     for user_id, user_dict in config['available_users']['users'].items():
@@ -50,7 +59,8 @@ def _validate_oncall_config(config_dict):
     assert 'user' in config_dict['current_config'], 'current_config.user not present'
     assert _validate_user(config_dict['current_config']['user']), 'current_config.user fails validation'
     assert _validate_top_contact_items(config_dict['current_config']), 'current_config contact items fail validation'
-    assert 'modified' in config_dict['current_config'], 'current_config.modified not present'
+    assert 'last_modified_time' in config_dict['current_config'], 'current_config.last_modified_time not present'
+    assert 'last_modified_user_id' in config_dict['current_config'], 'current_config.last_modified_user_id not present'
     assert 'available_users' in config_dict, 'Top-level available_users not present'
     assert 'users' in config_dict['available_users'], 'available_users.users not present'
     for user_id, user_dict in config_dict['available_users']['users'].items():
@@ -96,7 +106,9 @@ def _get_oncall_config():
     else:
         return {}
 
-def _set_oncall_config(config_dict):
+def _set_oncall_config(config_dict, actor_id):
+    config_dict['current_config']['last_modified_time'] = int(time.time())
+    config_dict['current_config']['last_modified_user_id'] = actor_id
     assert _validate_oncall_config(config_dict)
     s3c = boto3.client('s3')
     s3c.put_object(Bucket=os.getenv('BACKING_STORE_S3_BUCKET'), Key=os.getenv('BACKING_STORE_S3_KEY'), Body=json.dumps(config_dict, sort_keys=True, indent=4))

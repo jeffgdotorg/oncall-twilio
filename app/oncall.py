@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 import os
 from flask import (
         Flask,
@@ -155,7 +156,9 @@ def msgcontrol_who():
         logging.info('No user_dict in session. Bailing.')
         return str(resp)
     current_oncall_user = whos_oncall.get_current_oncall_user()
-    resp.message('Current on-call engineer: {} <{}>'.format(current_oncall_user['name'], current_oncall_user['phone']))
+    modified_time = str(datetime.fromtimestamp(whos_oncall.get_oncall_config_last_modified_time()))
+    modified_user = whos_oncall.get_oncall_config_last_modified_user_id()
+    resp.message('Current on-call engineer: {} <{}>.\nLast modified {} by {}.'.format(current_oncall_user['name'], current_oncall_user['phone'], modified_time, modified_user))
     return str(resp)
 
 @app.route("/msgcontrol/help", methods=['POST'])
@@ -185,8 +188,8 @@ def msgcontrol_confirm():
     if 'c' != incoming_msg:
         logging.info('This URL is for take-confirmation but the message body {} does not fit. Bailing.'.format(incoming_msg))
         return str(resp)
-    whos_oncall.set_current_oncall_user(user_dict['id'])
-    resp.message('Okay, {}, you are now on call. Please leave a message to complete the flow and test delivery.'.format(user_dict['name']))
+    whos_oncall.set_current_oncall_user(user_dict['id'], user_dict['id'])
+    resp.message('Okay, {}, you are now on call. Please leave a message at {} to complete the flow and test delivery.'.format(user_dict['name'], whos_oncall.get_current_pager_phone()))
     session.pop('active_flow', '')
     return str(resp)
 
