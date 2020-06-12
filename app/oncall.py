@@ -1,6 +1,6 @@
-import logging
 from datetime import datetime
 import os
+import logging
 from flask import (
         Flask,
         session,
@@ -24,11 +24,12 @@ client = Client(os.getenv("TWILIO_ACCOUNT_SID"), os.getenv("TWILIO_AUTH_TOKEN"))
 app = Flask(__name__)
 app.secret_key = b")DFNG'96.xCn]Vfd^!Cy"
 app.config.update(
-            DEBUG=True,
-            MAIL_SERVER='aspmx.l.google.com',
-            MAIL_PORT=25,
-            MAIL_USE_TLS=True,
-            PERMANENT_SESSION_LIFETIME=30,
+            MAIL_SERVER=whos_oncall.get_current_mail_server(),
+            MAIL_PORT=whos_oncall.get_current_mail_port(),
+            MAIL_USE_TLS=whos_oncall.get_current_mail_use_tls(),
+            MAIL_USERNAME=whos_oncall.get_current_mail_username(),
+            MAIL_PASSWORD=whos_oncall.get_current_mail_password(),
+            PERMANENT_SESSION_LIFETIME=whos_oncall.get_current_session_lifetime(),
         )
 mailer = Mail(app)
 
@@ -184,6 +185,7 @@ def msgcontrol_confirm():
         return str(resp)
     if session.get('active_flow') != 'take':
         logging.info('Got what looks like a take-confirmation, but active_flow is {}. Session expired?'.format(session.get('active_flow')))
+        resp.message('No session. Issue TAKE again and confirm within {} seconds.'.format(whos_oncall.get_current_session_lifetime()))
         return str(resp)
     if 'c' != incoming_msg:
         logging.info('This URL is for take-confirmation but the message body {} does not fit. Bailing.'.format(incoming_msg))
