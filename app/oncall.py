@@ -1,6 +1,8 @@
 from datetime import datetime
 import os
 import logging
+import boto3
+import json
 from flask import (
         Flask,
         session,
@@ -82,6 +84,7 @@ def public_recordingcb():
     if rec_status == 'completed':
         _deliver_mms(resp, request)
         _deliver_email(resp, request)
+        _persist_recording(resp, request)
     elif rec_status == 'failed':
         _record_failed(resp, request)
     else:
@@ -262,6 +265,16 @@ def _deliver_email(resp, request):
     with urllib.request.urlopen(call_details['rec_url']) as rec_rsp:
         email.attach("voicemail.mp3", "audio/mpeg", rec_rsp.read())
     mailer.send(email)
+    return resp
+
+def _persist_recording(resp, request):
+    call_details = _coalesce_call_details(resp, request)
+    instant = datetime.now()
+    base_obj_name = 'recordings/{}'.format(instant.strftime('%Y-%m-%d_%H%M%S'))
+    s3c = boto3.client('s3')
+    with urllib.request.urlopen(call_details['rec_url']) as rec_rsp:
+        s3c.put_object(Bucket=os.getenv('BACKING_STORE_S3_BUCKET'), Key=base_obj_name + '.mp3', Body=rec_rsp.read())
+        s3c.put_object(Bucket=os.getenv('BACKING_STORE_S3_BUCKET'), Key=base_obj_name + '.json', Body=json.dumps(call_details, sort_keys=True, indent=4))
     return resp
 
 def _record_failed(resp, request):
