@@ -288,14 +288,17 @@ def _deliver_mms(resp, request):
 
 def _deliver_email(resp, request):
     call_details = _coalesce_call_details(resp, request)
+    logging.info('Building on-call e-mail from %s to %s', whos_oncall.get_current_from_email(), whos_oncall.get_current_to_email())
     email = Message(
                 "[OnCall] New on-call voicemail",
                 sender=whos_oncall.get_current_from_email(),
                 recipients=[whos_oncall.get_current_to_email()],
                 body='On-Call voicemail ({} sec) received from {} <{}>. Audio: {}'.format(call_details['rec_len'], call_details['caller_name'], call_details['caller_num'], call_details['rec_url'])
             )
+    logging.info('Attaching recording to on-call e-mail')
     with urllib.request.urlopen(call_details['rec_url']) as rec_rsp:
         email.attach("voicemail.mp3", "audio/mpeg", rec_rsp.read())
+    logging.info('Sending on-call e-mail')
     mailer.send(email)
     logging.info('Sent e-mail from %s to %s', whos_oncall.get_current_from_email(), whos_oncall.get_current_to_email())
     return resp
