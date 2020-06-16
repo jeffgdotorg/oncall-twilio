@@ -297,6 +297,7 @@ def _deliver_email(resp, request):
     with urllib.request.urlopen(call_details['rec_url']) as rec_rsp:
         email.attach("voicemail.mp3", "audio/mpeg", rec_rsp.read())
     mailer.send(email)
+    logging.info('Sent e-mail from %s to %s', whos_oncall.get_current_from_email(), whos_oncall.get_current_to_email())
     return resp
 
 def _persist_recording(resp, request):
