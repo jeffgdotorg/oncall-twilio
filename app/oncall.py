@@ -76,19 +76,21 @@ def wrongnumber_voice():
 @app.route("/public/answer", methods=['POST'])
 def public_answer():
     """Public entry point. Make the caller press 1 specifically to proceed."""
-    logging.debug('Yo, I got a call here from %s, SID %s', str(request.form.get('From')), str(request.form.get('CallSid')))
+    incoming_num = request.values.get('From', '')
+    dest_num = request.values.get('To', '')
+    logging.info('Voice call to voice number %s from caller %s.', dest_num, incoming_num)
     resp = VoiceResponse()
-    with resp.gather(
-            num_digits=1, action=url_for('public_keypress'), method="POST"
-    ) as g:
-        g.say(message="Press 1 to leave a message for the Open N M S on-call engineer.", voice='alice')
+    gather = Gather(num_digits=1, action=url_for('public_keypress'), method="POST")
+    gather.say("Press 1 to leave a message for the Open N M S on-call engineer.", voice='alice')
+    gather.pause(length=10)
+    resp.append(gather)
     return str(resp)
 
 @app.route("/public/keypress", methods=['POST'])
 def public_keypress():
     """The caller pressed a key. Now record their message, or hang up if wrong key."""
     selected_option = request.form['Digits']
-    logging.debug('Caller from %s, SID %s pressed %s', str(request.form.get('From')), str(request.form.get('CallSid')), selected_option)
+    logging.info('Caller from %s, SID %s pressed %s', str(request.form.get('From')), str(request.form.get('CallSid')), selected_option)
     resp = VoiceResponse()
     if selected_option == '1':
         _record_message(resp, request)
@@ -109,6 +111,7 @@ def public_afterrec():
 def public_recordingcb():
     """Recording status callback function for the public flow"""
     rec_status = request.form['RecordingStatus']
+    logging.info('Recording callback invoked with RecordingStatus=%s', rec_status)
     resp = VoiceResponse()
     if rec_status == 'completed':
         _deliver_mms(resp, request)
