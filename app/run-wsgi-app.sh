@@ -1,3 +1,3 @@
 #!/bin/bash
 
-gunicorn --bind 0.0.0.0:5000 wsgi
+gunicorn --workers 1 --bind 127.0.0.1:5000 wsgi
