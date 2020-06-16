@@ -41,8 +41,37 @@ def make_session_permanent():
 
 @app.route('/')
 @app.route('/public')
+@app.route('/msgcontrol')
+@app.route('/wrongnumber')
 def home():
-    return "<html><h1>Nothing to see here</h1></html>"
+    return "<html><h1>Invalid request</h1></html>"
+
+@app.route("/wrongnumber/sms", methods=['POST'])
+def wrongnumber_sms():
+    """Helpful entry point for texts sent to voice numbers"""
+    incoming_num = request.values.get('From', '')
+    dest_num = request.values.get('To', '')
+    logging.debug('Text sent to voice-only number %s from %s. Imparting a hint if sender is known to us.', dest_num, incoming_num)
+    resp = MessagingResponse()
+    friend = None
+    friend = whos_oncall.lookup_user_by_phone(incoming_num)
+    if friend != None:
+        logging.info('Looked up friend identity %s for %s from config, sending a hint that this (%s) is a voice-only number', friend['name'], incoming_num, dest_num)
+        resp.message('Hi there, {}. This is a voice-only number. For text commands you want {} instead.'.format(friend['name'], whos_oncall.get_current_from_phone()))
+    if friend == None:
+        logging.info("Ignoring message to voice-only number %s from unknown number %s", dest_num, incoming_num)
+    return str(resp)
+
+@app.route("/wrongnumber/voice", methods=['POST'])
+def wrongnumber_voice():
+    """Helpful entry point for voice calls to text-only numbers"""
+    incoming_num = request.values.get('From', '')
+    dest_num = request.values.get('To', '')
+    logging.debug('Voice call to text-only number %s from %s.', dest_num, incoming_num)
+    resp = VoiceResponse()
+    resp.say('This number does not accept calls.', voice='alice')
+    resp.hangup()
+    return str(resp)
 
 @app.route("/public/answer", methods=['POST'])
 def public_answer():
