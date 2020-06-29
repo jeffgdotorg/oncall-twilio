@@ -159,6 +159,8 @@ def msgcontrol_entry():
         resp.redirect(url_for('msgcontrol_confirm'))
     elif 'x' == incoming_msg:
         resp.redirect(url_for('msgcontrol_cancel'))
+    elif 'look' in incoming_msg:
+        resp.redirect(url_for('msgcontrol_look'))
     elif 'halp' in incoming_msg:
         resp.redirect(url_for('msgcontrol_help'))
     else:
@@ -207,6 +209,19 @@ def msgcontrol_help():
         logging.info('No user_dict in session. Bailing.')
         return str(resp)
     resp.message('Hi there, {}. Commands I understand:\n\n TAKE\n WHO\n HALP\n'.format(user_dict['name']))
+    return str(resp)
+
+@app.route("/msgcontrol/look", methods=['POST'])
+def msgcontrol_look():
+    incoming_msg = request.values.get('Body', '').lower().strip()
+    incoming_num = request.values.get('From', '')
+    resp = MessagingResponse()
+    user_dict = session.get('user_dict')
+    if user_dict == None:
+        logging.info('No user_dict in session. Bailing.')
+        return str(resp)
+    logging.warn('%s must be very proud of finding the LOOK verb!', user_dict['name'])
+    resp.message('HELLO {}.\n\nYOU ARE IN A MAZE OF TWISTY LITTLE PASSAGES, ALL ALIKE.\n\n>_'.format(user_dict['name'].upper()))
     return str(resp)
 
 @app.route("/msgcontrol/confirm", methods=['POST'])
