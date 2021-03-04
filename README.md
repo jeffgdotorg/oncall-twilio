@@ -12,11 +12,11 @@ Requirements
 ============
 You will need the following:
 
-# Several Python modules installed, preferably inside a virtual environment; the required modules are listed in `requirements.txt`
-# A [Twilio](https://www.twilio.com) account with at least one phone number capable of handling voice, SMS, and MMS
-# A place to host the app; any platform capable of running Python and Flask should do, but it has been tested on Linux (CentOS 8).
-# An [AWS](https://aws.amazon.com/getting-started/) account with permission to configure S3 buckets
-# An SMTP relay, for delivering copies of recorded messages via e-mail as a backup mechanism
+1. Several Python modules installed, preferably inside a virtual environment; the required modules are listed in `requirements.txt`
+1. A [Twilio](https://www.twilio.com) account with at least one phone number capable of handling voice, SMS, and MMS
+1. A place to host the app; any platform capable of running Python and Flask should do, but it has been tested on Linux (CentOS 8).
+1. An [AWS](https://aws.amazon.com/getting-started/) account with permission to configure S3 buckets
+1. An SMTP relay, for delivering copies of recorded messages via e-mail as a backup mechanism
 
 Operational Configuration
 =========================
