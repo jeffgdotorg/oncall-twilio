@@ -95,7 +95,7 @@ Controlling via SMS
 Any team member can control the system by SMSing the number configured as `current_config.from_phone` with the following commands:
 
 * Learn who is currently on-call: `WHO`
-* Become on-call: `TAKE`, followed by completion of a confirmation exchange within the configured timeout window
+* Become on-call: `TAKE`, followed by completion of a confirmation exchange within timeout (in whole seconds) configured in `current_config.session_lifetime`.
 * Get a summary of supported commands: `HALP` (`HELP` is reserved and captured by Twilio in most cases)
 
 The effect of the `TAKE` action is reflected in the operational config, a new version of which is written to the S3 bucket.
